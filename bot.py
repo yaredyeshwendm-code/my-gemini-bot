@@ -1,42 +1,47 @@
-import os
 import telebot
 import google.generativeai as genai
+import os
+from flask import Flask
+from threading import Thread
 
-# የእርሶ ቶክኖች እዚህ ተተክተዋል
+# 1. ቦቱን ለሬንደር (Render) ማዘጋጀት
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+  return "Mask On Bot is running!"
+
+# 2. ያቀረብካቸውን ቶክኖች እዚህ ተክቻቸዋለሁ
 BOT_TOKEN = "8558837716:AAGqh6T7PyJGzElWWWCija1ygnYSm4cm4Gc"
 GEMINI_API_KEY = "AIzaSyDUCF6xNLhlRnMnoQS4ZVdRBAT5C7QcG8o"
 
-# Gemini ማዋቀር
+# 3. ጌሚኒን ማዘጋጀት
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
-
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# የቦቱ መክፈቻ መልእክት (Identity: Mask On 🎭)
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-  welcome_text = "ሰላም! እኔ 'Mask On' 🎭 የተባልኩ የ Gemini AI ቦት ነኝ። ምን ልርዳህ?"
-  bot.reply_to(message, welcome_text)
+# 4. ቦቱ ማንነቱን እንዲያውቅ የተሰጠ መመሪያ (System Prompt)
+SYSTEM_PROMPT = "Your name is Mask On. You are a helpful, smart, and friendly AI assistant. Always introduce yourself as Mask On if asked."
 
 @bot.message_handler(func=lambda message: True)
 def chat(message):
   try:
-    # ቦቱ እያሰበ መሆኑን ለማሳየት
-    bot.send_chat_action(message.chat.id, 'typing')
+    model = genai.GenerativeModel("gemini-pro")
+    # ለጌሚኒ ቦቱ ማን እንደሆነ እንነግረዋለን
+    full_prompt = f"{SYSTEM_PROMPT}\n\nUser: {message.text}\nMask On:"
     
-    # ከ Gemini መልስ መጠየቅ
-    response = model.generate_content(message.text)
-    
-    # መልሱን ለተጠቃሚው መላክ
-    if response.text:
-      bot.reply_to(message, response.text)
-    else:
-      bot.reply_to(message, "ይቅርታ፣ 'Mask On' 🎭 አሁን መልስ መስጠት አልቻለም።")
+    response = model.generate_content(full_prompt)
+    bot.reply_to(message, response.text)
   except Exception as e:
-    bot.reply_to(message, "ይቅርታ፣ ስህተት ተከስቷል። እባክህ ቆይተህ ሞክር።")
     print(f"Error: {e}")
+    bot.reply_to(message, "I'm sorry, I'm having a little trouble thinking. Try again in a moment!")
 
-# ቦቱን ማስነሳት
+def run_bot():
+  bot.polling(none_stop=True)
+
 if __name__ == "__main__":
-  print("Mask On 🎭 is running...")
-  bot.infinity_polling()
+  # ቦቱን በጀርባ ማስነሳት
+  Thread(target=run_bot).start()
+  
+  # ሬንደር የሚፈልገውን ፖርት (Port) መክፈት
+  port = int(os.environ.get("PORT", 10000))
+  app.run(host='0.0.0.0', port=port)
